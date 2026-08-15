@@ -8,7 +8,8 @@ private final class ClipboardPanel: NSPanel {
 }
 
 @MainActor
-final class FloatingPanelController {
+final class FloatingPanelController: NSObject, NSWindowDelegate {
+    private static let panelSize = NSSize(width: 620, height: 520)
     private let panel: ClipboardPanel
     private var previousApplication: NSRunningApplication?
 
@@ -20,7 +21,7 @@ final class FloatingPanelController {
         onQuit: @escaping () -> Void
     ) {
         panel = ClipboardPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 480),
+            contentRect: NSRect(origin: .zero, size: Self.panelSize),
             styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -28,18 +29,20 @@ final class FloatingPanelController {
         panel.title = "Clipboard"
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.isFloatingPanel = true
         panel.level = .floating
-        panel.hidesOnDeactivate = false
+        panel.hidesOnDeactivate = true
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.isReleasedWhenClosed = false
         panel.standardWindowButton(.closeButton)?.isHidden = true
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
+
+        super.init()
 
         let view = ClipboardPanelView(
             store: store,
@@ -50,6 +53,7 @@ final class FloatingPanelController {
             onQuit: onQuit
         )
         panel.contentView = NSHostingView(rootView: view)
+        panel.delegate = self
     }
 
     func toggle() {
@@ -62,37 +66,50 @@ final class FloatingPanelController {
 
     func show() {
         previousApplication = NSWorkspace.shared.frontmostApplication
-        positionOnActiveScreen()
+        let targetFrame = frameOnActiveScreen()
         NSApp.activate(ignoringOtherApps: true)
+        panel.alphaValue = 1
+        panel.setFrame(targetFrame, display: false)
         panel.orderFrontRegardless()
         panel.makeKey()
+
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .clipboardPanelWillShow, object: nil)
         }
     }
 
     func hide() {
+        guard panel.isVisible else { return }
         panel.orderOut(nil)
+        panel.alphaValue = 1
+        panel.setFrame(frameOnActiveScreen(), display: false)
     }
 
     func hideAndRestorePreviousApplication(completion: @escaping () -> Void) {
         panel.orderOut(nil)
+        panel.alphaValue = 1
         previousApplication?.activate(options: [])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             completion()
         }
     }
 
-    private func positionOnActiveScreen() {
+    func windowDidResignKey(_ notification: Notification) {
+        guard panel.isVisible else { return }
+        hide()
+    }
+
+    private func frameOnActiveScreen() -> NSRect {
         guard let screen = NSScreen.main else {
-            panel.center()
-            return
+            return panel.frame
         }
         let visibleFrame = screen.visibleFrame
-        let origin = NSPoint(
-            x: visibleFrame.midX - panel.frame.width / 2,
-            y: visibleFrame.midY - panel.frame.height / 2
+        return NSRect(
+            origin: NSPoint(
+                x: visibleFrame.midX - Self.panelSize.width / 2,
+                y: visibleFrame.midY - Self.panelSize.height / 2
+            ),
+            size: Self.panelSize
         )
-        panel.setFrameOrigin(origin)
     }
 }

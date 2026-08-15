@@ -121,6 +121,43 @@ public final class ClipboardStore: ObservableObject {
         return item
     }
 
+    @discardableResult
+    public func captureFiles(
+        _ urls: [URL],
+        sourceAppName: String?,
+        sourceBundleID: String?
+    ) -> ClipboardItem? {
+        let paths = Self.normalizedFilePaths(urls)
+        guard !paths.isEmpty else { return nil }
+
+        let hash = Self.contentHash(
+            kind: .files,
+            data: Self.fileReferenceData(forPaths: paths)
+        )
+        if let index = items.firstIndex(where: { $0.contentHash == hash }) {
+            var existing = items[index]
+            existing.capturedAt = .now
+            existing.sourceAppName = sourceAppName
+            existing.sourceBundleID = sourceBundleID
+            items.remove(at: index)
+            items.insert(existing, at: 0)
+            persist()
+            return existing
+        }
+
+        let item = ClipboardItem(
+            kind: .files,
+            filePaths: paths,
+            contentHash: hash,
+            sourceAppName: sourceAppName,
+            sourceBundleID: sourceBundleID
+        )
+        items.insert(item, at: 0)
+        enforceRetention()
+        persist()
+        return item
+    }
+
     public func togglePin(_ item: ClipboardItem) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index].isPinned.toggle()
@@ -153,11 +190,15 @@ public final class ClipboardStore: ObservableObject {
         return imagesDirectory.appendingPathComponent(filename)
     }
 
-    public static func contentHash(kind: ClipboardKind, data: Data) -> String {
+    nonisolated public static func contentHash(kind: ClipboardKind, data: Data) -> String {
         var input = Data(kind.rawValue.utf8)
         input.append(0)
         input.append(data)
         return SHA256.hash(data: input).map { String(format: "%02x", $0) }.joined()
+    }
+
+    nonisolated public static func fileReferenceData(_ urls: [URL]) -> Data {
+        fileReferenceData(forPaths: normalizedFilePaths(urls))
     }
 
     private func enforceRetention() {
@@ -175,6 +216,18 @@ public final class ClipboardStore: ObservableObject {
     private func removeImageFile(for item: ClipboardItem) {
         guard let filename = item.imageFilename else { return }
         try? FileManager.default.removeItem(at: imagesDirectory.appendingPathComponent(filename))
+    }
+
+    nonisolated private static func normalizedFilePaths(_ urls: [URL]) -> [String] {
+        var seen = Set<String>()
+        return urls
+            .filter(\.isFileURL)
+            .map { $0.standardizedFileURL.path }
+            .filter { seen.insert($0).inserted }
+    }
+
+    nonisolated private static func fileReferenceData(forPaths paths: [String]) -> Data {
+        Data(paths.sorted().joined(separator: "\u{0}").utf8)
     }
 
     private func persist() {

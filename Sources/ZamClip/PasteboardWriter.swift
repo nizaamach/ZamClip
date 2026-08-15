@@ -5,11 +5,13 @@ import Foundation
 enum ClipboardPayload {
     case text(String)
     case image(png: Data, tiff: Data?)
+    case files([URL])
 
     var kind: ClipboardKind {
         switch self {
         case .text: return .text
         case .image: return .image
+        case .files: return .files
         }
     }
 
@@ -17,6 +19,7 @@ enum ClipboardPayload {
         switch self {
         case .text(let text): return Data(text.utf8)
         case .image(let png, _): return png
+        case .files(let urls): return ClipboardStore.fileReferenceData(urls)
         }
     }
 }
@@ -33,6 +36,9 @@ final class PasteboardWriter {
                   let pngData = try? Data(contentsOf: url),
                   let image = NSImage(data: pngData) else { return nil }
             return .image(png: pngData, tiff: image.tiffRepresentation)
+        case .files:
+            guard let paths = item.filePaths, !paths.isEmpty else { return nil }
+            return .files(paths.map { URL(fileURLWithPath: $0) })
         }
     }
 
@@ -48,6 +54,8 @@ final class PasteboardWriter {
             if let tiff {
                 pasteboard.setData(tiff, forType: .tiff)
             }
+        case .files(let urls):
+            _ = pasteboard.writeObjects(urls.map { $0 as NSURL })
         }
     }
 }

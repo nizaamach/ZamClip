@@ -26,12 +26,18 @@ Direct paste may require enabling ZamClip under System Settings > Privacy & Secu
 ## Features
 
 - Text and image clipboard history
+- File and folder clipboard history, including multi-file selections
+- File history stores references only; moved or deleted files are marked missing
 - 500-item default retention limit
 - Pinned items survive retention cleanup
 - Duplicate items move to the top instead of creating a second entry
-- Compact floating glass panel
+- Spotlight-style floating search palette
 - Menu bar utility with `Command-Shift-V` global shortcut
-- Selecting an item restores the previous app and sends `Command-V`
+- Live search across clipboard text, file names, paths, and source apps
+- Full-text preview for selected long text items
+- Larger preview for selected image items
+- Image files such as PNG screenshots show a thumbnail and selected preview
+- Every item has a visible pin toggle; clicking selects, double-clicking pastes, and the context menu also exposes `Paste`
 - Arrow keys move the selection; `Enter` pastes the selected item; `Escape` or `X` closes the panel
 - Local JSON metadata and local image files
 - Configurable sensitive-app exclusions

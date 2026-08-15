@@ -29,4 +29,25 @@ final class ZamClipCoreTests: XCTestCase {
 
         XCTAssertEqual(item.previewText, "hello world")
     }
+
+    func testFileItemSummarizesMultipleFiles() {
+        let item = ClipboardItem(
+            kind: .files,
+            filePaths: ["/tmp/one.txt", "/tmp/two.txt", "/tmp/three.txt"],
+            contentHash: "hash"
+        )
+
+        XCTAssertEqual(item.fileSummary, "one.txt, two.txt + 1 more")
+        XCTAssertEqual(item.previewText, item.fileSummary)
+    }
+
+    func testFileReferenceHashIgnoresSelectionOrder() {
+        let first = [URL(fileURLWithPath: "/tmp/one.txt"), URL(fileURLWithPath: "/tmp/two.txt")]
+        let second = [URL(fileURLWithPath: "/tmp/two.txt"), URL(fileURLWithPath: "/tmp/one.txt")]
+
+        XCTAssertEqual(
+            ClipboardStore.contentHash(kind: .files, data: ClipboardStore.fileReferenceData(first)),
+            ClipboardStore.contentHash(kind: .files, data: ClipboardStore.fileReferenceData(second))
+        )
+    }
 }

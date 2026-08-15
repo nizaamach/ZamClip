@@ -52,6 +52,16 @@ public final class ClipboardMonitor {
         let source = sourceProvider()
         guard !exclusionProvider(source.bundleID) else { return }
 
+        let fileURLs = fileURLsOnPasteboard()
+        if !fileURLs.isEmpty {
+            let data = ClipboardStore.fileReferenceData(fileURLs)
+            if ignoredHashes.remove(ClipboardStore.contentHash(kind: .files, data: data)) != nil {
+                return
+            }
+            store.captureFiles(fileURLs, sourceAppName: source.name, sourceBundleID: source.bundleID)
+            return
+        }
+
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
             let data = Data(text.utf8)
             let hash = ClipboardStore.contentHash(kind: .text, data: data)
@@ -68,6 +78,23 @@ public final class ClipboardMonitor {
             if ignoredHashes.remove(hash) != nil { return }
             store.captureImage(normalizedData, sourceAppName: source.name, sourceBundleID: source.bundleID)
             return
+        }
+    }
+
+    private func fileURLsOnPasteboard() -> [URL] {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [
+            .urlReadingFileURLsOnly: true
+        ]
+        let objects = pasteboard.readObjects(forClasses: [NSURL.self], options: options) ?? []
+
+        return objects.compactMap { object in
+            if let url = object as? URL, url.isFileURL {
+                return url
+            }
+            guard let url = object as? NSURL,
+                  url.isFileURL,
+                  let path = url.path else { return nil }
+            return URL(fileURLWithPath: path)
         }
     }
 }
