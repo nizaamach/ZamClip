@@ -9,7 +9,7 @@ private final class ClipboardPanel: NSPanel {
 
 @MainActor
 final class FloatingPanelController: NSObject, NSWindowDelegate {
-    private static let panelSize = NSSize(width: 620, height: 520)
+    private static let panelSize = NSSize(width: 520, height: 420)
     private let panel: ClipboardPanel
     private var previousApplication: NSRunningApplication?
     private var isPresentingModal = false

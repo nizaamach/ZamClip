@@ -124,7 +124,6 @@ struct ClipboardPanelView: View {
     @State private var selectedItemID: ClipboardItem.ID?
     @State private var showingClearConfirmation = false
     @State private var searchText = ""
-    @State private var fullTextItem: ClipboardItem?
     @FocusState private var searchFieldFocused: Bool
 
     private var visibleItems: [ClipboardItem] {
@@ -147,11 +146,6 @@ struct ClipboardPanelView: View {
         }
     }
 
-    private var selectedItem: ClipboardItem? {
-        guard let selectedItemID else { return nil }
-        return visibleItems.first { $0.id == selectedItemID }
-    }
-
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -166,7 +160,7 @@ struct ClipboardPanelView: View {
             }
             .padding(10)
         }
-        .frame(width: 620, height: 520)
+        .frame(width: 520, height: 420)
         .overlay {
             KeyboardCaptureView { event in
                 handleKeyPress(event)
@@ -196,9 +190,6 @@ struct ClipboardPanelView: View {
             DispatchQueue.main.async {
                 searchFieldFocused = true
             }
-        }
-        .sheet(item: $fullTextItem) { item in
-            FullTextPreview(item: item, onCopy: onCopy)
         }
         .alert("Clear unpinned items?", isPresented: $showingClearConfirmation) {
             Button("Clear", role: .destructive) {
@@ -255,17 +246,6 @@ struct ClipboardPanelView: View {
             }
             .menuStyle(.borderlessButton)
             .help("More actions")
-
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 26, height: 26)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
-            .help("Close")
         }
         .padding(.horizontal, 13)
         .frame(height: 50)
@@ -324,61 +304,55 @@ struct ClipboardPanelView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(spacing: 8) {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 7) {
-                                ForEach(visibleItems, id: \.id) { item in
-                                    ClipboardRow(
-                                        item: item,
-                                        imageURL: store.imageURL(for: item),
-                                        isSelected: selectedItemID == item.id,
-                                        onTogglePin: { store.togglePin(item) }
-                                    )
-                                        .id(item.id)
-                                        .highPriorityGesture(
-                                            TapGesture(count: 2).onEnded {
-                                                selectedItemID = item.id
-                                                onCopy(item)
-                                            }
-                                        )
-                                        .onTapGesture {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 7) {
+                            ForEach(visibleItems, id: \.id) { item in
+                                ClipboardRow(
+                                    item: item,
+                                    imageURL: store.imageURL(for: item),
+                                    isSelected: selectedItemID == item.id,
+                                    onTogglePin: { store.togglePin(item) }
+                                )
+                                    .id(item.id)
+                                    .highPriorityGesture(
+                                        TapGesture(count: 2).onEnded {
                                             selectedItemID = item.id
+                                            onCopy(item)
                                         }
-                                        .contextMenu {
-                                            Button("Paste") { onCopy(item) }
-                                            Button(item.isPinned ? "Unpin" : "Pin") {
-                                                store.togglePin(item)
-                                            }
-                                            Divider()
-                                            Button("Delete", role: .destructive) {
-                                                store.delete(item)
-                                            }
+                                    )
+                                    .onTapGesture {
+                                        selectedItemID = item.id
+                                    }
+                                    .contextMenu {
+                                        Button("Paste") { onCopy(item) }
+                                        Button(item.isPinned ? "Unpin" : "Pin") {
+                                            store.togglePin(item)
                                         }
-                                        .accessibilityAddTraits(.isButton)
-                                        .accessibilityHint("Selects this item. Double-click or press Enter to paste.")
-                                }
-                            }
-                            .padding(.horizontal, 2)
-                            .padding(.vertical, 2)
-                        }
-                        .scrollIndicators(.hidden)
-                        .onChange(of: selectedItemID) { _, newID in
-                            guard let newID else { return }
-                            proxy.scrollTo(newID, anchor: .center)
-                        }
-                        .onReceive(NotificationCenter.default.publisher(for: .clipboardPanelWillShow)) { _ in
-                            selectedItemID = visibleItems.first?.id
-                            if let firstID = visibleItems.first?.id {
-                                proxy.scrollTo(firstID, anchor: .top)
+                                        Divider()
+                                        Button("Delete", role: .destructive) {
+                                            store.delete(item)
+                                        }
+                                    }
+                                    .accessibilityAddTraits(.isButton)
+                                    .accessibilityHint("Selects this item. Double-click or press Enter to paste.")
                             }
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 2)
                     }
-
-                    selectedTextPreview
-                    selectedImagePreview
-                    selectedFilePreview
+                    .scrollIndicators(.hidden)
+                    .onChange(of: selectedItemID) { _, newID in
+                        guard let newID else { return }
+                        proxy.scrollTo(newID, anchor: .center)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .clipboardPanelWillShow)) { _ in
+                        selectedItemID = visibleItems.first?.id
+                        if let firstID = visibleItems.first?.id {
+                            proxy.scrollTo(firstID, anchor: .top)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -412,153 +386,6 @@ struct ClipboardPanelView: View {
             return "No matching items"
         }
         return filter == .pinned ? "No pinned items" : "Copy something to start"
-    }
-
-    @ViewBuilder
-    private var selectedTextPreview: some View {
-        if let item = selectedItem,
-           item.kind == .text,
-           let text = item.text,
-           isLongText(text) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack {
-                    Text("Selected preview")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Show Full Text") {
-                        fullTextItem = item
-                    }
-                    .buttonStyle(.link)
-                    .font(.system(size: 11, weight: .medium))
-                }
-
-                Text(text)
-                    .font(.system(size: 12, design: .monospaced))
-                    .lineLimit(4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            }
-            .padding(10)
-            .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-            }
-            .padding(.top, 2)
-        }
-    }
-
-    private func isLongText(_ text: String) -> Bool {
-        text.count > 120 || text.contains("\n")
-    }
-
-    @ViewBuilder
-    private var selectedImagePreview: some View {
-        if let item = selectedItem,
-           item.kind == .image,
-           let imageURL = store.imageURL(for: item),
-           let image = loadImage(from: imageURL) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack {
-                    Text("Image preview")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("Enter to paste")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                }
-
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 112)
-                    .padding(6)
-                    .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity)
-            .frame(height: 146, alignment: .top)
-            .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-            }
-            .accessibilityLabel("Selected image preview")
-        }
-    }
-
-    private func loadImage(from url: URL) -> NSImage? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return NSImage(data: data)
-    }
-
-    @ViewBuilder
-    private var selectedFilePreview: some View {
-        if let item = selectedItem,
-           item.kind == .files,
-           let filePaths = item.filePaths,
-           !filePaths.isEmpty {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 9) {
-                    if let imageURL = selectedImageFileURL,
-                       let image = loadImage(from: imageURL) {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 42, height: 42)
-                            .background(Color.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    } else {
-                        let category = FileCategory.category(for: item.fileURLs)
-                        Image(systemName: category.symbolName)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(category.tint)
-                            .frame(width: 30, height: 30)
-                            .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.fileSummary)
-                            .font(.system(size: 12, weight: .medium))
-                            .lineLimit(1)
-                        Text(filePaths.count == 1 ? "1 file" : "\(filePaths.count) files")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-                }
-
-                if let imageURL = selectedImageFileURL,
-                   let image = loadImage(from: imageURL) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: 112)
-                        .padding(6)
-                        .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                }
-
-                Text(filePaths.joined(separator: "\n"))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(10)
-            .background(Color.black.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .accessibilityLabel("Selected file preview")
-        }
-    }
-
-    private var selectedImageFileURL: URL? {
-        guard let item = selectedItem, item.kind == .files else { return nil }
-        return item.fileURLs.first { isImageFile($0) && FileManager.default.fileExists(atPath: $0.path) }
-    }
-
-    private func isImageFile(_ url: URL) -> Bool {
-        ["png", "jpg", "jpeg", "gif", "webp", "heic", "tif", "tiff"].contains(url.pathExtension.lowercased())
     }
 
     private func moveSelection(by offset: Int) {
@@ -602,52 +429,6 @@ struct ClipboardPanelView: View {
             return false
         }
         return true
-    }
-}
-
-private struct FullTextPreview: View {
-    let item: ClipboardItem
-    let onCopy: (ClipboardItem) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Full Text")
-                    .font(.system(size: 17, weight: .semibold))
-                Spacer()
-                Button("Done") {
-                    dismiss()
-                }
-            }
-
-            if let sourceAppName = item.sourceAppName {
-                Text("Copied from \(sourceAppName)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-
-            ScrollView {
-                Text(item.text ?? "")
-                    .font(.system(size: 13, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(Color.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-
-            HStack {
-                Spacer()
-                Button("Paste") {
-                    onCopy(item)
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(20)
-        .frame(width: 500, height: 390)
     }
 }
 
