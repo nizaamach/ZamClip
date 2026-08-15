@@ -19,6 +19,97 @@ private enum ClipboardFilter: String, CaseIterable {
     }
 }
 
+private enum FileCategory: Hashable {
+    case folder
+    case image
+    case video
+    case audio
+    case document
+    case spreadsheet
+    case presentation
+    case archive
+    case code
+    case font
+    case design
+    case mixed
+    case generic
+
+    var symbolName: String {
+        switch self {
+        case .folder: return "folder.fill"
+        case .image: return "photo"
+        case .video: return "film"
+        case .audio: return "music.note"
+        case .document: return "doc.text"
+        case .spreadsheet: return "tablecells"
+        case .presentation: return "rectangle.3.group"
+        case .archive: return "archivebox"
+        case .code: return "curlybraces"
+        case .font: return "textformat"
+        case .design: return "paintpalette"
+        case .mixed: return "square.grid.2x2"
+        case .generic: return "doc"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .folder: return .blue
+        case .image: return .purple
+        case .video: return .indigo
+        case .audio: return .pink
+        case .document: return .red
+        case .spreadsheet: return .green
+        case .presentation: return .orange
+        case .archive: return .brown
+        case .code: return .teal
+        case .font: return .mint
+        case .design: return .cyan
+        case .mixed, .generic: return .secondary
+        }
+    }
+
+    static func category(for urls: [URL]) -> FileCategory {
+        let categories = Set(urls.map(category(for:)))
+        guard categories.count == 1, let category = categories.first else {
+            return categories.isEmpty ? .generic : .mixed
+        }
+        return category
+    }
+
+    private static func category(for url: URL) -> FileCategory {
+        if let values = try? url.resourceValues(forKeys: [.isDirectoryKey]),
+           values.isDirectory == true {
+            return .folder
+        }
+
+        switch url.pathExtension.lowercased() {
+        case "png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp", "svg":
+            return .image
+        case "mov", "mp4", "m4v", "avi", "mkv", "webm":
+            return .video
+        case "mp3", "m4a", "wav", "aiff", "flac", "ogg", "caf":
+            return .audio
+        case "xls", "xlsx", "csv", "tsv", "numbers":
+            return .spreadsheet
+        case "ppt", "pptx", "key":
+            return .presentation
+        case "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "dmg", "pkg", "iso":
+            return .archive
+        case "swift", "m", "h", "mm", "c", "cpp", "cc", "hpp", "rs", "go", "py", "js", "jsx", "ts", "tsx", "java", "kt", "kts", "rb", "php", "sh", "zsh", "bash", "json", "yaml", "yml", "xml", "html", "css", "scss", "sql":
+            return .code
+        case "ttf", "otf", "woff", "woff2":
+            return .font
+        case "psd", "ai", "sketch", "fig", "figma":
+            return .design
+        case "pdf", "doc", "docx", "pages", "rtf", "txt", "md":
+            return .document
+        default:
+            return .generic
+        }
+    }
+}
+
 struct ClipboardPanelView: View {
     @ObservedObject var store: ClipboardStore
     @ObservedObject var settings: AppSettings
@@ -27,6 +118,7 @@ struct ClipboardPanelView: View {
     let onClose: () -> Void
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
+    let onModalStateChange: (Bool) -> Void
 
     @State private var filter: ClipboardFilter = .all
     @State private var selectedItemID: ClipboardItem.ID?
@@ -90,6 +182,9 @@ struct ClipboardPanelView: View {
         }
         .onChange(of: searchText) { _, _ in
             selectedItemID = visibleItems.first?.id
+        }
+        .onChange(of: showingClearConfirmation) { _, isPresented in
+            onModalStateChange(isPresented)
         }
         .onExitCommand {
             onClose()
@@ -415,9 +510,10 @@ struct ClipboardPanelView: View {
                             .frame(width: 42, height: 42)
                             .background(Color.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     } else {
-                        Image(systemName: filePaths.count == 1 ? "doc" : "doc.on.doc")
+                        let category = FileCategory.category(for: item.fileURLs)
+                        Image(systemName: category.symbolName)
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(category.tint)
                             .frame(width: 30, height: 30)
                             .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
@@ -644,9 +740,9 @@ private struct ClipboardRow: View {
 
     private var textRow: some View {
         HStack(spacing: 10) {
-            Image(systemName: item.isPinned ? "pin.fill" : "doc.text")
+            Image(systemName: "doc.text")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(item.isPinned ? Color.orange : Color.primary.opacity(0.55))
+                .foregroundStyle(Color.primary.opacity(0.55))
                 .frame(width: 30, height: 30)
                 .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
@@ -721,6 +817,10 @@ private struct ClipboardRow: View {
         item.filePaths?.count ?? 0
     }
 
+    private var fileCategory: FileCategory {
+        FileCategory.category(for: item.fileURLs)
+    }
+
     private var pinButton: some View {
         Button(action: onTogglePin) {
             Image(systemName: item.isPinned ? "pin.fill" : "pin")
@@ -743,9 +843,9 @@ private struct ClipboardRow: View {
                 .frame(width: 42, height: 42)
                 .background(Color.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         } else {
-            Image(systemName: fileCount == 1 ? "doc" : "doc.on.doc")
+            Image(systemName: fileCategory.symbolName)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(item.isPinned ? Color.orange : Color.primary.opacity(0.62))
+                .foregroundStyle(fileCategory.tint)
                 .frame(width: 30, height: 30)
                 .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }

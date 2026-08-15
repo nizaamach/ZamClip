@@ -37,6 +37,7 @@ Direct paste may require enabling ZamClip under System Settings > Privacy & Secu
 - Full-text preview for selected long text items
 - Larger preview for selected image items
 - Image files such as PNG screenshots show a thumbnail and selected preview
+- File rows use category icons for folders, media, documents, code, archives, and more
 - Every item has a visible pin toggle; clicking selects, double-clicking pastes, and the context menu also exposes `Paste`
 - Arrow keys move the selection; `Enter` pastes the selected item; `Escape` or `X` closes the panel
 - Local JSON metadata and local image files

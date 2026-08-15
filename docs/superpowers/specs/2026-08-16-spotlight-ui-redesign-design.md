@@ -14,6 +14,7 @@ Make the clipboard palette feel like a native macOS search surface: search is th
 - Replace the title/header block with one primary search bar containing search, clear, actions, and close controls.
 - Replace the heavy segmented picker with quiet All and Pinned filter pills.
 - Use one consistent result row language for text, images, and files.
+- Give file rows category-specific icons for folders, media, documents, code, archives, and mixed selections.
 - Keep the selected preview below the result list so the list remains the primary navigation surface.
 - Render image files such as PNG screenshots as image thumbnails and selected previews when the referenced file is available.
 - Keep a small keyboard hint row at the bottom: navigation, paste, click selection, and close.

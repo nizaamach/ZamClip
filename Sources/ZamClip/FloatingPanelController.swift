@@ -12,6 +12,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private static let panelSize = NSSize(width: 620, height: 520)
     private let panel: ClipboardPanel
     private var previousApplication: NSRunningApplication?
+    private var isPresentingModal = false
 
     init(
         store: ClipboardStore,
@@ -50,7 +51,14 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             onCopy: onCopy,
             onClose: { [weak self] in self?.hide() },
             onOpenSettings: onOpenSettings,
-            onQuit: onQuit
+            onQuit: onQuit,
+            onModalStateChange: { [weak self] isPresented in
+                guard let self else { return }
+                self.isPresentingModal = isPresented
+                if !isPresented, self.panel.isVisible {
+                    self.panel.makeKey()
+                }
+            }
         )
         panel.contentView = NSHostingView(rootView: view)
         panel.delegate = self
@@ -95,7 +103,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        guard panel.isVisible else { return }
+        guard panel.isVisible, !isPresentingModal else { return }
         hide()
     }
 
