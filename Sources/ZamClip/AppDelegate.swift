@@ -43,15 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onQuit: { NSApp.terminate(nil) }
         )
 
-        do {
-            globalHotKey = try GlobalHotKey { [weak self] in
-                Task { @MainActor in
-                    self?.panelController.toggle()
-                }
-            }
-        } catch {
-            NSLog("ZamClip could not register the global shortcut: \(error)")
-        }
+        configureGlobalHotKey()
 
         DispatchQueue.main.async { [weak self] in
             self?.panelController.show()
@@ -77,7 +69,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.imagePosition = .imageLeading
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePanel)
-        statusItem.button?.toolTip = "ZamClip (⌘⇧V)"
+        updateStatusItemShortcut()
+    }
+
+    private func updateStatusItemShortcut() {
+        statusItem.button?.toolTip = "ZamClip (\(settings.shortcutDisplay))"
+    }
+
+    private func configureGlobalHotKey() {
+        globalHotKey = nil
+
+        do {
+            globalHotKey = try GlobalHotKey(
+                keyCode: settings.hotKeyKeyCode,
+                modifiers: settings.hotKeyModifiers
+            ) { [weak self] in
+                Task { @MainActor in
+                    self?.panelController.toggle()
+                }
+            }
+            updateStatusItemShortcut()
+        } catch {
+            NSLog("ZamClip could not register the global shortcut: \(error)")
+        }
     }
 
     private func copy(_ item: ClipboardItem) {
@@ -117,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 430),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 470),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -128,7 +142,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: SettingsView(
                 settings: settings,
                 launchManager: launchManager,
-                store: store
+                store: store,
+                onShortcutChange: { [weak self] in
+                    self?.configureGlobalHotKey()
+                }
             )
         )
         window.center()

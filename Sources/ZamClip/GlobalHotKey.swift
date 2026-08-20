@@ -1,3 +1,4 @@
+import AppKit
 import Carbon.HIToolbox
 import Foundation
 
@@ -11,7 +12,7 @@ final class GlobalHotKey {
     private var eventHandlerRef: EventHandlerRef?
     private let action: () -> Void
 
-    init(action: @escaping () -> Void) throws {
+    init(keyCode: UInt32, modifiers: UInt32, action: @escaping () -> Void) throws {
         self.action = action
 
         var eventType = EventTypeSpec(
@@ -40,8 +41,8 @@ final class GlobalHotKey {
 
         let hotKeyID = EventHotKeyID(signature: OSType(0x434C4950), id: 1)
         let registerStatus = RegisterEventHotKey(
-            UInt32(kVK_ANSI_V),
-            UInt32(cmdKey | shiftKey),
+            keyCode,
+            modifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -52,6 +53,31 @@ final class GlobalHotKey {
                 RemoveEventHandler(eventHandlerRef)
             }
             throw GlobalHotKeyError.unableToRegisterHotKey(registerStatus)
+        }
+    }
+
+    static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+        var modifiers: UInt32 = 0
+        if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
+        if flags.contains(.shift) { modifiers |= UInt32(shiftKey) }
+        if flags.contains(.option) { modifiers |= UInt32(optionKey) }
+        if flags.contains(.control) { modifiers |= UInt32(controlKey) }
+        return modifiers
+    }
+
+    static func keyLabel(for event: NSEvent) -> String {
+        switch event.keyCode {
+        case UInt16(kVK_Return): return "Return"
+        case UInt16(kVK_Tab): return "Tab"
+        case UInt16(kVK_Space): return "Space"
+        case UInt16(kVK_Delete): return "Delete"
+        case UInt16(kVK_Escape): return "Escape"
+        case UInt16(kVK_UpArrow): return "Up"
+        case UInt16(kVK_DownArrow): return "Down"
+        case UInt16(kVK_LeftArrow): return "Left"
+        case UInt16(kVK_RightArrow): return "Right"
+        default:
+            return event.charactersIgnoringModifiers?.uppercased() ?? "Key \(event.keyCode)"
         }
     }
 

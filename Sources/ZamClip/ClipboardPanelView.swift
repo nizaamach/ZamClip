@@ -458,7 +458,10 @@ private final class KeyboardCaptureNSView: NSView {
         guard window != nil else { return }
 
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, self.window?.isVisible == true, self.onKeyDown?(event) == true else {
+            guard let self,
+                  self.window?.isVisible == true,
+                  self.window?.isKeyWindow == true,
+                  self.onKeyDown?(event) == true else {
                 return event
             }
             return nil

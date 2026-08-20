@@ -1,3 +1,5 @@
+import AppKit
+import Carbon.HIToolbox
 import ZamClipCore
 import SwiftUI
 
@@ -5,9 +7,11 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var launchManager: LaunchManager
     @ObservedObject var store: ClipboardStore
+    let onShortcutChange: () -> Void
 
     @State private var newBundleID = ""
     @State private var showingClearConfirmation = false
+    @State private var isRecordingShortcut = false
 
     var body: some View {
         Form {
@@ -19,6 +23,39 @@ struct SettingsView: View {
                         set: { launchManager.setEnabled($0) }
                     )
                 )
+
+                HStack {
+                    Text("Global shortcut")
+                    Spacer()
+                    Button(isRecordingShortcut ? "Press keys..." : settings.shortcutDisplay) {
+                        isRecordingShortcut = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if isRecordingShortcut {
+                    Text("Press a key with Command, Shift, Option, or Control.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                ShortcutRecorder(
+                    isRecording: $isRecordingShortcut,
+                    onShortcut: { keyCode, modifiers, label in
+                        settings.setGlobalShortcut(
+                            keyCode: keyCode,
+                            modifiers: modifiers,
+                            keyLabel: label
+                        )
+                        isRecordingShortcut = false
+                        onShortcutChange()
+                    },
+                    onCancel: {
+                        isRecordingShortcut = false
+                    }
+                )
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
 
                 Picker(
                     "History limit",
@@ -82,12 +119,66 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding(18)
-        .frame(width: 500, height: 430)
+        .frame(width: 500, height: 470)
         .alert("Clear unpinned items?", isPresented: $showingClearConfirmation) {
             Button("Clear", role: .destructive) { store.clearUnpinned() }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Pinned items will remain.")
         }
+    }
+}
+
+private struct ShortcutRecorder: NSViewRepresentable {
+    @Binding var isRecording: Bool
+    let onShortcut: (UInt32, UInt32, String) -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> ShortcutRecorderNSView {
+        let view = ShortcutRecorderNSView()
+        view.isRecording = isRecording
+        view.onShortcut = onShortcut
+        view.onCancel = onCancel
+        return view
+    }
+
+    func updateNSView(_ nsView: ShortcutRecorderNSView, context: Context) {
+        nsView.isRecording = isRecording
+        nsView.onShortcut = onShortcut
+        nsView.onCancel = onCancel
+        if isRecording {
+            nsView.window?.makeFirstResponder(nsView)
+        }
+    }
+}
+
+private final class ShortcutRecorderNSView: NSView {
+    var isRecording = false
+    var onShortcut: ((UInt32, UInt32, String) -> Void)?
+    var onCancel: (() -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if isRecording {
+            window?.makeFirstResponder(self)
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isRecording else { return }
+        if event.keyCode == UInt16(kVK_Escape) {
+            onCancel?()
+            return
+        }
+
+        let modifiers = GlobalHotKey.carbonModifiers(from: event.modifierFlags)
+        guard modifiers != 0 else {
+            NSSound.beep()
+            return
+        }
+
+        onShortcut?(UInt32(event.keyCode), modifiers, GlobalHotKey.keyLabel(for: event))
     }
 }
